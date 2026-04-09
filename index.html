@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Predict Drought | AgriProtect 3D</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;500;800&family=Outfit:wght@400;700&display=swap" rel="stylesheet">
+    
+    <!-- 3D Globe Dependencies -->
+    <script src="//unpkg.com/three"></script>
+    <script src="//unpkg.com/globe.gl"></script>
+    
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            overflow: hidden; 
+            background: #050505;
+            font-family: 'Inter', sans-serif;
+            color: #fff;
+        }
+
+        .navbar {
+            position: absolute;
+            top: 0;
+            width: 100%;
+            z-index: 100;
+            background: rgba(0,0,0,0.5);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .navbar a.logo {
+            color: white; padding: 20px; text-decoration: none; 
+            display: flex; align-items: center; gap: 10px; font-weight: 600;
+        }
+
+        .nav-links a { color: #aaa; text-decoration: none; margin-right: 20px; font-weight: 500;}
+        .nav-links a:last-child { color: #fff; font-weight: 600; }
+
+        #globeViz {
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 0;
+        }
+
+        .layout-container {
+            position: absolute;
+            top: 80px;
+            left: 50px;
+            z-index: 10;
+            display: flex;
+            height: calc(100vh - 100px);
+            align-items: center;
+            pointer-events: none;
+            width: 100%;
+        }
+
+        .glass-panel {
+            pointer-events: auto;
+            width: 380px;
+            background: rgba(15, 18, 25, 0.7);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 30px 60px rgba(0,0,0,0.8), inset 0 1px 0 rgba(255,255,255,0.1);
+            transition: all 0.4s ease;
+        }
+
+        .glass-panel h2 {
+            font-family: 'Outfit', sans-serif;
+            margin: 0 0 20px 0;
+            font-size: 24px;
+            letter-spacing: 1px;
+            background: linear-gradient(90deg, #fff, #aaa);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .form-group { margin-bottom: 20px; }
+        .form-group label {
+            display: block; margin-bottom: 6px; font-size: 11px;
+            text-transform: uppercase; letter-spacing: 1px; color: #888;
+        }
+        .form-group input, .form-group select {
+            width: calc(100% - 24px); padding: 12px; background: rgba(0,0,0,0.4);
+            border: 1px solid rgba(255,255,255,0.15); border-radius: 8px;
+            color: #fff; font-family: inherit; outline: none; transition: border-color 0.3s;
+        }
+        .form-group input:focus, .form-group select:focus {
+            border-color: #00e676; background: rgba(0,0,0,0.6);
+        }
+        .form-group select option { background: #111; color: #fff; }
+
+        .btn-primary {
+            width: 100%; padding: 14px; background: linear-gradient(90deg, #00e676, #00b0ff);
+            border: none; border-radius: 8px; color: #fff; font-family: 'Outfit', sans-serif;
+            font-weight: 700; font-size: 15px; letter-spacing: 1px; cursor: pointer;
+            text-transform: uppercase; transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .btn-primary:hover {
+            transform: translateY(-2px); box-shadow: 0 10px 20px rgba(0, 230, 118, 0.3);
+        }
+
+        .result-area {
+            display: none; margin-top: 25px; padding-top: 20px;
+            border-top: 1px solid rgba(255,255,255,0.1); text-align: center;
+        }
+        .prob-value { font-family: 'Outfit', sans-serif; font-size: 52px; font-weight: 800; margin: 10px 0; line-height: 1; }
+        .status-badge { display: inline-block; padding: 8px 16px; border-radius: 30px; font-size: 13px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; }
+
+        .loader-ring {
+            display: none; width: 30px; height: 30px; margin: 20px auto;
+            border: 3px solid rgba(255,255,255,0.1); border-radius: 50%;
+            border-top-color: #00e676; animation: spin 1s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+
+    <nav class="navbar">
+        <a href="#" class="logo">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+            AgriProtect AI
+        </a>
+        <div class="nav-links">
+            <a href="#">Predict</a>
+        </div>
+    </nav>
+
+    <div id="globeViz"></div>
+
+    <div class="layout-container">
+        <div class="glass-panel">
+            <h2>Drought Analysis</h2>
+            
+            <form id="predict-form" onsubmit="event.preventDefault(); runPrediction();">
+                <div class="form-group">
+                    <label for="region">Region</label>
+                    <select id="region" name="region" required onchange="flyToRegion()">
+                        <option value="" disabled selected>Select State in India</option>
+                        <option value="15.9129,79.7400">Andhra Pradesh</option>
+                        <option value="28.2180,94.7278">Arunachal Pradesh</option>
+                        <option value="26.2006,92.9376">Assam</option>
+                        <option value="25.0961,85.3131">Bihar</option>
+                        <option value="21.2787,81.8661">Chhattisgarh</option>
+                        <option value="15.2993,74.1240">Goa</option>
+                        <option value="22.2587,71.1924">Gujarat</option>
+                        <option value="29.0588,76.0856">Haryana</option>
+                        <option value="31.1048,77.1734">Himachal Pradesh</option>
+                        <option value="23.6102,85.2799">Jharkhand</option>
+                        <option value="15.3173,75.7139">Karnataka</option>
+                        <option value="10.8505,76.2711">Kerala</option>
+                        <option value="22.9734,78.6569">Madhya Pradesh</option>
+                        <option value="19.7515,75.7139">Maharashtra</option>
+                        <option value="24.6637,93.9063">Manipur</option>
+                        <option value="25.4670,91.3662">Meghalaya</option>
+                        <option value="23.1645,92.9376">Mizoram</option>
+                        <option value="26.1584,94.5624">Nagaland</option>
+                        <option value="20.9517,85.0985">Odisha</option>
+                        <option value="31.1471,75.3412">Punjab</option>
+                        <option value="27.0238,74.2179">Rajasthan</option>
+                        <option value="27.5330,88.5122">Sikkim</option>
+                        <option value="11.1271,78.6569">Tamil Nadu</option>
+                        <option value="18.1124,79.0193">Telangana</option>
+                        <option value="23.9408,91.9882">Tripura</option>
+                        <option value="26.8467,80.9462">Uttar Pradesh</option>
+                        <option value="30.0668,79.0193">Uttarakhand</option>
+                        <option value="22.9868,87.8550">West Bengal</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="rainfall">Rainfall (mm)</label>
+                    <input type="number" id="rainfall" placeholder="e.g. 120" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="temperature">Temperature (°C)</label>
+                    <input type="number" id="temperature" placeholder="e.g. 35.5" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="soil_moisture">Soil Moisture</label>
+                    <input type="number" id="soil_moisture" placeholder="e.g. 15" required>
+                </div>
+
+                <button type="submit" class="btn-primary">Analyze Risk</button>
+            </form>
+
+            <div class="loader-ring" id="loader"></div>
+            
+            <div class="result-area" id="resultContent">
+                <label style="font-size: 11px; color:#888; text-transform:uppercase; letter-spacing:2px;">AI Probability</label>
+                <div class="prob-value" id="probText">--%</div>
+                <div class="status-badge" id="statusText">--</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const colorPalette = {
+            0: { hex: '#00e676', name: 'No Drought' },
+            1: { hex: '#ffea00', name: 'Mild Drought' },
+            2: { hex: '#ff9100', name: 'Moderate Drought' },
+            3: { hex: '#ff3d00', name: 'Severe Drought' },
+            4: { hex: '#d50000', name: 'Extreme Drought' }
+        };
+
+        const globe = Globe()
+            (document.getElementById('globeViz'))
+            .globeImageUrl('//unpkg.com/three-globe/example/img/earth-water.png')
+            .bumpImageUrl('//unpkg.com/three-globe/example/img/earth-topology.png')
+            .backgroundImageUrl('//unpkg.com/three-globe/example/img/night-sky.png')
+            .atmosphereColor('#2B4B8B')
+            .atmosphereAltitude(0.20);
+
+        globe.controls().autoRotate = true;
+        globe.controls().autoRotateSpeed = 0.5;
+
+        function flyToRegion() {
+            const regionSelect = document.getElementById('region').value;
+            if(regionSelect) {
+                const [lat, lng] = regionSelect.split(',').map(Number);
+                globe.controls().autoRotate = false;
+                globe.pointOfView({ lat, lng, altitude: 1.5 }, 1500);
+            }
+        }
+
+        async function runPrediction() {
+            const regionVal = document.getElementById('region').value;
+            if(!regionVal) return;
+
+            const [lat, lng] = regionVal.split(',').map(Number);
+            const rain = document.getElementById('rainfall').value;
+            const temp = document.getElementById('temperature').value;
+            const soil = document.getElementById('soil_moisture').value;
+
+            document.getElementById('resultContent').style.display = 'none';
+            document.getElementById('loader').style.display = 'block';
+
+            globe.pointOfView({ lat, lng, altitude: 0.8 }, 2000);
+
+            try {
+                // Connect to Flask backend
+                const response = await fetch('/predict', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ latitude: lat, longitude: lng, rain: rain, temp: temp, soil: soil })
+                });
+                const data = await response.json();
+
+                document.getElementById('loader').style.display = 'none';
+                document.getElementById('resultContent').style.display = 'block';
+                
+                const style = colorPalette[data.class_index];
+                document.getElementById('probText').innerText = data.drought_probability + '%';
+                document.getElementById('probText').style.color = style.hex;
+                document.getElementById('statusText').innerText = data.drought_class;
+                
+                document.getElementById('statusText').style.background = style.hex + '22';
+                document.getElementById('statusText').style.color = style.hex;
+                document.getElementById('statusText').style.border = `1px solid ${style.hex}88`;
+
+                const ringData = [{ lat: lat, lng: lng, color: style.hex }];
+                globe.ringsData(ringData)
+                    .ringColor('color')
+                    .ringMaxRadius(8)
+                    .ringPropagationSpeed(4)
+                    .ringRepeatPeriod(600);
+            } catch(e) {
+                console.error(e);
+            }
+        }
+    </script>
+</body>
+</html>
