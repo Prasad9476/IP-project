@@ -111,11 +111,48 @@
         }
 
         .result-area {
-            display: none; margin-top: 25px; padding-top: 20px;
+            display: none; margin-top: 15px; padding-top: 15px;
             border-top: 1px solid rgba(255,255,255,0.1); text-align: center;
         }
-        .prob-value { font-family: 'Outfit', sans-serif; font-size: 52px; font-weight: 800; margin: 10px 0; line-height: 1; }
-        .status-badge { display: inline-block; padding: 8px 16px; border-radius: 30px; font-size: 13px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; }
+
+        .crop-suggestion {
+            margin-top: 20px;
+            text-align: left;
+        }
+
+        .crop-suggestion label {
+            font-size: 10px; color: #888; text-transform: uppercase; letter-spacing: 2px;
+            margin-bottom: 12px; display: block;
+        }
+
+        .crop-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .crop-card {
+            background: rgba(255,255,255,0.05);
+            padding: 10px;
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.1);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 13px;
+            font-weight: 500;
+            transition: transform 0.3s;
+        }
+
+        .crop-card:hover {
+            transform: translateY(-2px);
+            background: rgba(255,255,255,0.1);
+        }
+
+        .crop-icon { font-size: 20px; }
+
+        .prob-value { font-family: 'Outfit', sans-serif; font-size: 48px; font-weight: 800; margin: 5px 0; line-height: 1; }
+        .status-badge { display: inline-block; padding: 6px 14px; border-radius: 30px; font-size: 12px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; }
 
         .loader-ring {
             display: none; width: 30px; height: 30px; margin: 20px auto;
@@ -200,9 +237,16 @@
             <div class="loader-ring" id="loader"></div>
             
             <div class="result-area" id="resultContent">
-                <label style="font-size: 11px; color:#888; text-transform:uppercase; letter-spacing:2px;">AI Probability</label>
+                <label style="font-size: 10px; color:#888; text-transform:uppercase; letter-spacing:2px;">AI Probability</label>
                 <div class="prob-value" id="probText">--%</div>
                 <div class="status-badge" id="statusText">--</div>
+
+                <div class="crop-suggestion">
+                    <label>Recommended Crops</label>
+                    <div class="crop-grid" id="cropGrid">
+                        <!-- Crops inserted here -->
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -232,7 +276,7 @@
             if(regionSelect) {
                 const [lat, lng] = regionSelect.split(',').map(Number);
                 globe.controls().autoRotate = false;
-                globe.pointOfView({ lat, lng, altitude: 1.5 }, 1500);
+                globe.pointOfView({ lat, lng, altitude: 1.5 }, 1200);
             }
         }
 
@@ -241,21 +285,20 @@
             if(!regionVal) return;
 
             const [lat, lng] = regionVal.split(',').map(Number);
-            const rain = document.getElementById('rainfall').value;
-            const temp = document.getElementById('temperature').value;
-            const soil = document.getElementById('soil_moisture').value;
+            const rain = parseFloat(document.getElementById('rainfall').value);
+            const temp = parseFloat(document.getElementById('temperature').value);
+            const soil = parseFloat(document.getElementById('soil_moisture').value);
 
             document.getElementById('resultContent').style.display = 'none';
             document.getElementById('loader').style.display = 'block';
 
-            globe.pointOfView({ lat, lng, altitude: 0.8 }, 1200); // Faster zoom
+            globe.pointOfView({ lat, lng, altitude: 0.8 }, 1200);
 
-            // Instant AI Simulation (No Backend fetch needed for display purposes)
             setTimeout(() => {
                 document.getElementById('loader').style.display = 'none';
                 document.getElementById('resultContent').style.display = 'block';
                 
-                // Advanced algorithmic simulation based on inputs
+                // --- Drought Logic ---
                 let riskIndex = temp > 30 && rain < 50 ? 4 : (temp > 25 && rain < 100 ? 3 : 1);
                 let prob = Math.floor(Math.random() * 20) + (riskIndex * 20);
                 if (prob > 95) prob = 95;
@@ -267,19 +310,59 @@
                 document.getElementById('probText').innerText = prob + '%';
                 document.getElementById('probText').style.color = style.hex;
                 document.getElementById('statusText').innerText = style.name;
-                
                 document.getElementById('statusText').style.background = style.hex + '22';
                 document.getElementById('statusText').style.color = style.hex;
                 document.getElementById('statusText').style.border = `1px solid ${style.hex}88`;
+
+                // --- Crop Suggestion Logic (Top 4) ---
+                let suggestedCrops = [];
+                if (rain > 150) {
+                    suggestedCrops = [
+                        { name: "Rice", icon: "🍚" },
+                        { name: "Sugarcane", icon: "🎋" },
+                        { name: "Jute", icon: "🧵" },
+                        { name: "Rubber", icon: "🌳" }
+                    ];
+                } else if (temp < 25 && rain > 60) {
+                    suggestedCrops = [
+                        { name: "Wheat", icon: "🍞" },
+                        { name: "Barley", icon: "🌾" },
+                        { name: "Mustard", icon: "🌼" },
+                        { name: "Gram", icon: "🍛" }
+                    ];
+                } else if (rain < 60 || temp > 32) {
+                    suggestedCrops = [
+                        { name: "Bajra", icon: "🌾" },
+                        { name: "Sorghum", icon: "🥣" },
+                        { name: "Ragi", icon: "🍲" },
+                        { name: "Moong", icon: "🌱" }
+                    ];
+                } else {
+                    suggestedCrops = [
+                        { name: "Maize", icon: "🌽" },
+                        { name: "Cotton", icon: "☁️" },
+                        { name: "Soybean", icon: "🥣" },
+                        { name: "Groundnut", icon: "🥜" }
+                    ];
+                }
+
+                const cropGrid = document.getElementById('cropGrid');
+                cropGrid.innerHTML = '';
+                suggestedCrops.forEach(crop => {
+                    const card = document.createElement('div');
+                    card.className = 'crop-card';
+                    card.innerHTML = `<span class="crop-icon">${crop.icon}</span> ${crop.name}`;
+                    cropGrid.appendChild(card);
+                });
 
                 const ringData = [{ lat: lat, lng: lng, color: style.hex }];
                 globe.ringsData(ringData)
                     .ringColor('color')
                     .ringMaxRadius(12)
                     .ringPropagationSpeed(8)
-                    .ringRepeatPeriod(400); // Faster ring animation
-            }, 500); // Super fast 0.5 sec analysis
-        }
+                    .ringRepeatPeriod(400);
+            }, 500);
+        }}
     </script>
 </body>
 </html>
